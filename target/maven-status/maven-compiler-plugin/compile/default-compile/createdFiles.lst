@@ -1,0 +1,3 @@
+com\repotodeck\RepoToDeckApplication.class
+com\repotodeck\model\ServiceNode.class
+com\repotodeck\service\DockerParserService.class
