@@ -1,3 +1,5 @@
 com\repotodeck\RepoToDeckApplication.class
+com\repotodeck\controller\PptController.class
+com\repotodeck\service\PptGeneratorService.class
 com\repotodeck\model\ServiceNode.class
 com\repotodeck\service\DockerParserService.class

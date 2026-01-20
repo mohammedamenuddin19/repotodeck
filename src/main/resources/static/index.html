@@ -3,261 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RepoToDeck - Docker Compose to PowerPoint</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>RepoToDeck - MVP</title>
     <style>
-        /* Custom dark theme enhancements */
+        /* Dark Mode UI */
         body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 { margin-bottom: 10px; }
+        .container {
+            background-color: #252526;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            width: 80%;
+            max-width: 800px;
+            text-align: center;
         }
         textarea {
-            font-family: 'Courier New', monospace;
+            width: 100%;
+            height: 300px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            resize: vertical;
         }
-        .glow-button:hover {
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
         }
+        button:hover { background-color: #005f9e; }
+        button:disabled { background-color: #4a4a4a; cursor: not-allowed; }
+        #status { margin-top: 15px; font-size: 14px; color: #aaaaaa; }
     </style>
 </head>
-<body class="min-h-screen text-gray-100">
-    <div class="container mx-auto px-4 py-8 max-w-7xl">
-        <!-- Header -->
-        <header class="mb-8 text-center">
-            <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                RepoToDeck
-            </h1>
-            <p class="text-gray-400 text-lg">Transform your Docker Compose files into beautiful architecture diagrams</p>
-        </header>
+<body>
 
-        <!-- Main Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left Side: YAML Input -->
-            <div class="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
-                <h2 class="text-xl font-semibold mb-4 text-blue-400">
-                    <svg class="inline-block w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    Docker Compose YAML
-                </h2>
-                <textarea
-                    id="yamlInput"
-                    class="w-full h-96 bg-slate-900 text-gray-100 p-4 rounded-lg border border-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none font-mono text-sm"
-                    placeholder="Paste your docker-compose.yml content here...
-
-Example:
-services:
-  web:
-    image: nginx:latest
-    depends_on:
-      - db
-  db:
-    image: postgres:15
-  cache:
-    image: redis:7"
-                ></textarea>
-                <div class="mt-4 flex items-center text-sm text-gray-400">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Paste your docker-compose.yml content above
-                </div>
-            </div>
-
-            <!-- Right Side: Generate Button and Info -->
-            <div class="flex flex-col justify-between">
-                <div class="bg-slate-800 rounded-lg shadow-xl p-6 border border-slate-700">
-                    <h2 class="text-xl font-semibold mb-4 text-purple-400">
-                        <svg class="inline-block w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                        </svg>
-                        Generate Architecture Diagram
-                    </h2>
-                    
-                    <button
-                        id="generateBtn"
-                        class="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-lg transition-all duration-200 glow-button transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        onclick="generateSlide()"
-                    >
-                        <span class="flex items-center justify-center">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            Generate Slide
-                        </span>
-                    </button>
-
-                    <!-- Status Message -->
-                    <div id="statusMessage" class="mt-4 hidden p-4 rounded-lg"></div>
-
-                    <!-- Features Info -->
-                    <div class="mt-6 space-y-3 text-sm text-gray-400">
-                        <div class="flex items-start">
-                            <svg class="w-5 h-5 mr-2 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            <span>Automatically detects database services (PostgreSQL, MySQL, MongoDB)</span>
-                        </div>
-                        <div class="flex items-start">
-                            <svg class="w-5 h-5 mr-2 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            <span>Visualizes service dependencies and connections</span>
-                        </div>
-                        <div class="flex items-start">
-                            <svg class="w-5 h-5 mr-2 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            <span>Creates professional PowerPoint presentations</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Example YAML Quick Fill -->
-                <div class="mt-6 bg-slate-800 rounded-lg shadow-xl p-4 border border-slate-700">
-                    <button
-                        onclick="loadExample()"
-                        class="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center"
-                    >
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                        Load Example YAML
-                    </button>
-                </div>
-            </div>
-        </div>
+    <div class="container">
+        <h1>RepoToDeck 🚀</h1>
+        <p>Paste your Docker Compose YAML below to generate a PPT.</p>
+        
+        <textarea id="yamlInput" placeholder="version: '3.8'&#10;services:&#10;  web:&#10;    image: nginx..."></textarea>
+        
+        <br>
+        <button id="generateBtn" onclick="generatePPT()">Generate & Download PPT</button>
+        <p id="status"></p>
     </div>
 
     <script>
-        function showStatus(message, type = 'info') {
-            const statusDiv = document.getElementById('statusMessage');
-            statusDiv.className = `mt-4 p-4 rounded-lg ${
-                type === 'error' ? 'bg-red-900/50 text-red-200 border border-red-700' :
-                type === 'success' ? 'bg-green-900/50 text-green-200 border border-green-700' :
-                'bg-blue-900/50 text-blue-200 border border-blue-700'
-            }`;
-            statusDiv.textContent = message;
-            statusDiv.classList.remove('hidden');
-        }
+        async function generatePPT() {
+            const yamlContent = document.getElementById('yamlInput').value;
+            const status = document.getElementById('status');
+            const btn = document.getElementById('generateBtn');
 
-        function hideStatus() {
-            document.getElementById('statusMessage').classList.add('hidden');
-        }
-
-        async function generateSlide() {
-            const yamlInput = document.getElementById('yamlInput');
-            const generateBtn = document.getElementById('generateBtn');
-            const yamlContent = yamlInput.value.trim();
-
-            if (!yamlContent) {
-                showStatus('Please enter Docker Compose YAML content', 'error');
+            if (!yamlContent.trim()) {
+                status.innerText = "❌ Please paste some YAML code first.";
+                status.style.color = "#ff6b6b";
                 return;
             }
 
-            // Disable button and show loading
-            generateBtn.disabled = true;
-            generateBtn.innerHTML = `
-                <span class="flex items-center justify-center">
-                    <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Generating...
-                </span>
-            `;
-            hideStatus();
+            // UI State: Loading
+            btn.disabled = true;
+            btn.innerText = "Generating...";
+            status.innerText = "Processing... (This might take 5-10 seconds)";
+            status.style.color = "#aaaaaa";
 
             try {
-                const response = await fetch('/api/generate', {
+                // THE FIX: Sending JSON, expecting BLOB (Binary File)
+                const response = await fetch('/api/generate-slide', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain',
-                    },
-                    body: yamlContent
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ yaml: yamlContent })
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `Server error: ${response.status}`);
+                    throw new Error("Server Error: " + response.statusText);
                 }
 
-                // Get the blob and trigger download
+                // CRITICAL: Convert response to Blob (Binary Large Object)
                 const blob = await response.blob();
+
+                // Create a temporary download link
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'architecture.pptx';
+                a.download = "architecture_diagram.pptx"; // Filename
                 document.body.appendChild(a);
+                
+                // Trigger download
                 a.click();
+                
+                // Cleanup
+                a.remove();
                 window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
 
-                showStatus('PowerPoint file generated successfully! Check your downloads.', 'success');
+                status.innerText = "✅ Success! Downloading...";
+                status.style.color = "#4ec9b0";
+
             } catch (error) {
-                console.error('Error generating slide:', error);
-                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+                status.innerText = "❌ Error: " + error.message;
+                status.style.color = "#ff6b6b";
             } finally {
-                // Re-enable button
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = `
-                    <span class="flex items-center justify-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                        </svg>
-                        Generate Slide
-                    </span>
-                `;
+                btn.disabled = false;
+                btn.innerText = "Generate & Download PPT";
             }
         }
-
-        function loadExample() {
-            const exampleYaml = `services:
-  web:
-    image: nginx:latest
-    depends_on:
-      - db
-      - cache
-    ports:
-      - "80:80"
-  
-  api:
-    image: node:18
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgres://db:5432/mydb
-  
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=mydb
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-    volumes:
-      - db_data:/var/lib/postgresql/data
-  
-  cache:
-    image: redis:7
-    ports:
-      - "6379:6379"
-  
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-
-volumes:
-  db_data:`;
-
-            document.getElementById('yamlInput').value = exampleYaml;
-            hideStatus();
-        }
-
-        // Allow Enter+Ctrl/Cmd to generate
-        document.getElementById('yamlInput').addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                generateSlide();
-            }
-        });
     </script>
 </body>
 </html>
