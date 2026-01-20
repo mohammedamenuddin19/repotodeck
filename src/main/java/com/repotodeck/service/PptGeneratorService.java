@@ -33,43 +33,41 @@ public class PptGeneratorService {
      * @throws IOException if PowerPoint generation fails
      */
     public byte[] generateSlide(List<ServiceNode> nodes) throws IOException {
-        if (nodes == null || nodes.isEmpty()) {
-            // Return empty presentation
-            XMLSlideShow pptx = new XMLSlideShow();
+        // 1. Wrap creation in try-with-resources so it auto-closes
+        try (XMLSlideShow pptx = new XMLSlideShow()) {
+            
+            if (nodes == null || nodes.isEmpty()) {
+                XSLFSlide slide = pptx.createSlide();
+                XSLFTextBox textBox = slide.createTextBox();
+                textBox.setText("No services to display");
+                textBox.setAnchor(new Rectangle2D.Double(START_X, START_Y, 400, 50));
+                return writeToByteArray(pptx);
+            }
+    
+            // Set slide size (16:9 aspect ratio)
+            pptx.setPageSize(new java.awt.Dimension(1920, 1080));
             XSLFSlide slide = pptx.createSlide();
-            XSLFTextBox textBox = slide.createTextBox();
-            textBox.setText("No services to display");
-            textBox.setAnchor(new Rectangle2D.Double(START_X, START_Y, 400, 50));
+    
+            Map<String, Rectangle2D.Double> nodePositions = new HashMap<>();
+    
+            // Create shapes
+            for (int i = 0; i < nodes.size(); i++) {
+                ServiceNode node = nodes.get(i);
+                int row = i / COLUMNS;
+                int col = i % COLUMNS;
+                double x = START_X + col * HORIZONTAL_SPACING;
+                double y = START_Y + row * VERTICAL_SPACING;
+    
+                XSLFAutoShape shape = createNodeShape(slide, node, x, y);
+                Rectangle2D.Double bounds = new Rectangle2D.Double(x, y, SHAPE_WIDTH, SHAPE_HEIGHT);
+                nodePositions.put(node.getId(), bounds);
+            }
+    
+            // Draw connectors
+            drawConnectors(slide, nodes, nodePositions);
+    
             return writeToByteArray(pptx);
-        }
-
-        XMLSlideShow pptx = new XMLSlideShow();
-        // Set slide size (16:9 aspect ratio)
-        pptx.setPageSize(new java.awt.Dimension(1920, 1080));
-
-        XSLFSlide slide = pptx.createSlide();
-
-        // Map to store node positions for connector drawing
-        Map<String, Rectangle2D.Double> nodePositions = new HashMap<>();
-
-        // Create shapes for each node in a grid layout
-        for (int i = 0; i < nodes.size(); i++) {
-            ServiceNode node = nodes.get(i);
-            int row = i / COLUMNS;
-            int col = i % COLUMNS;
-
-            double x = START_X + col * HORIZONTAL_SPACING;
-            double y = START_Y + row * VERTICAL_SPACING;
-
-            XSLFAutoShape shape = createNodeShape(slide, node, x, y);
-            Rectangle2D.Double bounds = new Rectangle2D.Double(x, y, SHAPE_WIDTH, SHAPE_HEIGHT);
-            nodePositions.put(node.getId(), bounds);
-        }
-
-        // Draw connectors for links
-        drawConnectors(slide, nodes, nodePositions);
-
-        return writeToByteArray(pptx);
+        } // <--- pptx.close() happens automatically here!
     }
 
     /**
