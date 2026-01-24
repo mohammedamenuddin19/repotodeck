@@ -131,38 +131,40 @@ public class PptGeneratorService {
                 Rectangle2D.Double end = positions.get(target);
                 if (end == null) continue;
 
-                XSLFAutoShape line = slide.createAutoShape();
-                line.setShapeType(ShapeType.LINE);
+                // --- FIX: Use XSLFConnectorShape instead of AutoShape ---
+                // This is the "Native" way to draw lines in PPT.
+                // It avoids the "Corrupt Shape" errors caused by manual geometry.
+                XSLFConnectorShape connector = slide.createConnector();
                 
-                // Calculate Centers
                 double startX = start.getX() + start.getWidth() / 2;
                 double startY = start.getY() + start.getHeight() / 2;
                 double endX = end.getX() + end.getWidth() / 2;
                 double endY = end.getY() + end.getHeight() / 2;
 
-                // --- THE FIX STARTS HERE ---
                 double width = Math.abs(endX - startX);
                 double height = Math.abs(endY - startY);
 
-                // Prevent "Zero Dimension" error in PowerPoint
+                // Prevent Zero-Dimension crash (PowerPoint hates 0x0 objects)
                 if (width < 1.0) width = 1.0;
                 if (height < 1.0) height = 1.0;
 
-                line.setAnchor(new Rectangle2D.Double(
+                connector.setAnchor(new Rectangle2D.Double(
                     Math.min(startX, endX), 
                     Math.min(startY, endY),
                     width, 
                     height
                 ));
-                // --- THE FIX ENDS HERE ---
 
-                // Trick to flip line if needed based on direction
-                if ((endX < startX && endY > startY) || (endX > startX && endY < startY)) {
-                    line.setFlipVertical(true);
+                // Handle Direction Flipping (Crucial for diagonals)
+                if (startX > endX) {
+                    connector.setFlipHorizontal(true);
+                }
+                if (startY > endY) {
+                    connector.setFlipVertical(true);
                 }
 
-                line.setLineColor(Color.GRAY);
-                line.setLineWidth(1.5);
+                connector.setLineColor(Color.GRAY);
+                connector.setLineWidth(1.5);
             }
         }
     }
