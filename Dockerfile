@@ -6,14 +6,14 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Stage 2: Run the JAR (THE FIX)
-# We switch to Standard Linux (Debian/Ubuntu) for the running app.
-# This solves the Font/Graphics issues permanently.
+# Stage 2: Run the JAR
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Install basic font configuration just to be 100% safe
-RUN apt-get update && apt-get install -y fontconfig libfreetype6 && rm -rf /var/lib/apt/lists/*
+# --- THE FIX IS HERE ---
+# Previously we only installed the engine (fontconfig). 
+# Now we install the actual fonts (fonts-dejavu) so Java can write text.
+RUN apt-get update && apt-get install -y fontconfig libfreetype6 fonts-dejavu && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
