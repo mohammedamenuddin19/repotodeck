@@ -1,7 +1,8 @@
 package com.repotodeck.service;
 
 import com.repotodeck.model.ServiceNode;
-import org.apache.poi.sl.usermodel.*;
+import org.apache.poi.sl.usermodel.ShapeType;
+import org.apache.poi.sl.usermodel.TextParagraph;
 import org.apache.poi.xslf.usermodel.*;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +10,7 @@ import java.awt.*;
 import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,151 +18,150 @@ import java.util.Map;
 @Service
 public class PptGeneratorService {
 
-    private static final int COLUMNS = 3;
-    private static final int SHAPE_WIDTH = 200;
-    private static final int SHAPE_HEIGHT = 100;
-    private static final int HORIZONTAL_SPACING = 250;
-    private static final int VERTICAL_SPACING = 150;
-    private static final int START_X = 100;
-    private static final int START_Y = 100;
+    private static final int NODE_WIDTH = 180;
+    private static final int NODE_HEIGHT = 90;
+    private static final int NODE_SPACING_X = 60;  // Space between nodes horizontally
+    private static final int LAYER_SPACING_Y = 180; // Space between layers vertically
+    private static final int START_Y = 120; // Top margin
 
-    /**
-     * Generate a PowerPoint slide from a list of ServiceNode objects.
-     * Nodes are arranged in a 3-column grid with connectors showing links.
-     *
-     * @param nodes list of ServiceNode objects to visualize
-     * @return byte array representing the PPTX file
-     * @throws IOException if PowerPoint generation fails
-     */
     public byte[] generateSlide(List<ServiceNode> nodes) throws IOException {
-        // 1. Wrap creation in try-with-resources so it auto-closes
         try (XMLSlideShow pptx = new XMLSlideShow()) {
-            
+            pptx.setPageSize(new java.awt.Dimension(1280, 720)); // HD Aspect Ratio
+            XSLFSlide slide = pptx.createSlide();
+
             if (nodes == null || nodes.isEmpty()) {
-                XSLFSlide slide = pptx.createSlide();
-                XSLFTextBox textBox = slide.createTextBox();
-                textBox.setText("No services to display");
-                textBox.setAnchor(new Rectangle2D.Double(START_X, START_Y, 400, 50));
+                createEmptyState(slide);
                 return writeToByteArray(pptx);
             }
-    
-            // Set slide size (16:9 aspect ratio)
-            pptx.setPageSize(new java.awt.Dimension(1920, 1080));
-            XSLFSlide slide = pptx.createSlide();
-    
+
+            // 1. Organize Nodes into Layers (Tiers)
+            Map<Integer, List<ServiceNode>> layers = organizeIntoLayers(nodes);
             Map<String, Rectangle2D.Double> nodePositions = new HashMap<>();
-    
-            // Create shapes
-            for (int i = 0; i < nodes.size(); i++) {
-                ServiceNode node = nodes.get(i);
-                int row = i / COLUMNS;
-                int col = i % COLUMNS;
-                double x = START_X + col * HORIZONTAL_SPACING;
-                double y = START_Y + row * VERTICAL_SPACING;
-    
-                XSLFAutoShape shape = createNodeShape(slide, node, x, y);
-                Rectangle2D.Double bounds = new Rectangle2D.Double(x, y, SHAPE_WIDTH, SHAPE_HEIGHT);
-                nodePositions.put(node.getId(), bounds);
+
+            // 2. Draw Nodes Layer by Layer
+            for (int layerIdx = 0; layerIdx <= 2; layerIdx++) {
+                List<ServiceNode> layerNodes = layers.getOrDefault(layerIdx, new ArrayList<>());
+                if (layerNodes.isEmpty()) continue;
+
+                // Calculate center alignment
+                double totalLayerWidth = layerNodes.size() * (NODE_WIDTH + NODE_SPACING_X) - NODE_SPACING_X;
+                double startX = (1280 - totalLayerWidth) / 2;
+                double currentY = START_Y + (layerIdx * LAYER_SPACING_Y);
+
+                for (int i = 0; i < layerNodes.size(); i++) {
+                    ServiceNode node = layerNodes.get(i);
+                    double currentX = startX + (i * (NODE_WIDTH + NODE_SPACING_X));
+
+                    createNodeShape(slide, node, currentX, currentY);
+                    
+                    // Save position for connectors
+                    nodePositions.put(node.getId(), new Rectangle2D.Double(currentX, currentY, NODE_WIDTH, NODE_HEIGHT));
+                }
             }
-    
-            // Draw connectors
+
+            // 3. Draw Connectors (After nodes so lines are clean)
             drawConnectors(slide, nodes, nodePositions);
-    
+
             return writeToByteArray(pptx);
-        } // <--- pptx.close() happens automatically here!
+        }
     }
 
-    /**
-     * Create a shape for a ServiceNode based on its type.
-     */
-    private XSLFAutoShape createNodeShape(XSLFSlide slide, ServiceNode node, double x, double y) {
-        XSLFAutoShape shape;
+    private Map<Integer, List<ServiceNode>> organizeIntoLayers(List<ServiceNode> nodes) {
+        Map<Integer, List<ServiceNode>> layers = new HashMap<>();
+        layers.put(0, new ArrayList<>()); // Frontend/Web
+        layers.put(1, new ArrayList<>()); // Backend/API
+        layers.put(2, new ArrayList<>()); // Database/Infra
 
+        for (ServiceNode node : nodes) {
+            String id = node.getId().toLowerCase();
+            String image = node.getImage() != null ? node.getImage().toLowerCase() : "";
+
+            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("kafka")) {
+                layers.get(2).add(node);
+            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front")) {
+                layers.get(0).add(node);
+            } else {
+                layers.get(1).add(node); // Default to middle tier (API/Services)
+            }
+        }
+        return layers;
+    }
+
+    private void createNodeShape(XSLFSlide slide, ServiceNode node, double x, double y) {
+        XSLFAutoShape shape = slide.createAutoShape();
+        
         if ("DATABASE".equals(node.getType())) {
-            // FlowChart_Magnetic_Disk shape for databases (Orange)
-            shape = slide.createAutoShape();
             shape.setShapeType(ShapeType.FLOW_CHART_MAGNETIC_DISK);
-            shape.setFillColor(new Color(255, 165, 0)); // Orange
+            shape.setFillColor(new Color(255, 140, 0)); // Darker Orange
         } else {
-            // Round Rectangle for services (Blue)
-            shape = slide.createAutoShape();
             shape.setShapeType(ShapeType.ROUND_RECT);
-            shape.setFillColor(new Color(0, 100, 200)); // Blue
+            shape.setFillColor(new Color(0, 114, 198)); // Professional Blue
         }
 
-        shape.setAnchor(new Rectangle2D.Double(x, y, SHAPE_WIDTH, SHAPE_HEIGHT));
-        shape.setLineColor(Color.BLACK);
-        shape.setLineWidth(2.0);
+        shape.setAnchor(new Rectangle2D.Double(x, y, NODE_WIDTH, NODE_HEIGHT));
+        shape.setLineColor(Color.DARK_GRAY);
+        shape.setLineWidth(1.5);
 
-        // Add text label (ID and image)
-        // Clear existing text by removing all paragraphs and creating a new one
         shape.clearText();
-        XSLFTextParagraph paragraph = shape.addNewTextParagraph();
-        XSLFTextRun run1 = paragraph.addNewTextRun();
-        run1.setText(node.getId());
-        run1.setFontSize(14.0);
-        run1.setBold(true);
-        run1.setFontColor(Color.WHITE);
+        XSLFTextParagraph p = shape.addNewTextParagraph();
+        p.setTextAlign(TextParagraph.TextAlign.CENTER);
+        
+        XSLFTextRun r1 = p.addNewTextRun();
+        r1.setText(node.getId());
+        r1.setFontSize(14.0);
+        r1.setBold(true);
+        r1.setFontColor(Color.WHITE);
+        r1.setFontFamily("Arial"); // Safe font
 
         if (node.getImage() != null && !node.getImage().isEmpty()) {
-            XSLFTextRun run2 = paragraph.addNewTextRun();
-            run2.setText("\n" + node.getImage());
-            run2.setFontSize(10.0);
-            run2.setFontColor(Color.WHITE);
+            XSLFTextRun r2 = p.addNewTextRun();
+            r2.setText("\n(" + node.getImage() + ")");
+            r2.setFontSize(10.0);
+            r2.setFontColor(new Color(230, 230, 230));
         }
-
-        paragraph.setTextAlign(TextParagraph.TextAlign.CENTER);
-
-        return shape;
     }
 
-    /**
-     * Draw connectors (lines) between nodes based on their links.
-     */
     private void drawConnectors(XSLFSlide slide, List<ServiceNode> nodes, Map<String, Rectangle2D.Double> positions) {
         for (ServiceNode node : nodes) {
-            Rectangle2D.Double sourcePos = positions.get(node.getId());
-            if (sourcePos == null || node.getLinks() == null) {
-                continue;
-            }
+            if (node.getLinks() == null) continue;
+            Rectangle2D.Double start = positions.get(node.getId());
+            if (start == null) continue;
 
-            for (String targetId : node.getLinks()) {
-                Rectangle2D.Double targetPos = positions.get(targetId);
-                if (targetPos == null) {
-                    continue; // Target node not found
+            for (String target : node.getLinks()) {
+                Rectangle2D.Double end = positions.get(target);
+                if (end == null) continue;
+
+                XSLFAutoShape line = slide.createAutoShape();
+                line.setShapeType(ShapeType.LINE);
+                
+                // Calculate Centers
+                double startX = start.getX() + start.getWidth() / 2;
+                double startY = start.getY() + start.getHeight() / 2;
+                double endX = end.getX() + end.getWidth() / 2;
+                double endY = end.getY() + end.getHeight() / 2;
+
+                line.setAnchor(new Rectangle2D.Double(
+                    Math.min(startX, endX), Math.min(startY, endY),
+                    Math.abs(endX - startX), Math.abs(endY - startY)
+                ));
+
+                // Trick to flip line if needed based on direction
+                if ((endX < startX && endY > startY) || (endX > startX && endY < startY)) {
+                    line.setFlipVertical(true);
                 }
 
-                // Calculate connection points (center of shapes)
-                double sourceX = sourcePos.getX() + sourcePos.getWidth() / 2;
-                double sourceY = sourcePos.getY() + sourcePos.getHeight() / 2;
-                double targetX = targetPos.getX() + targetPos.getWidth() / 2;
-                double targetY = targetPos.getY() + targetPos.getHeight() / 2;
-
-                // Create connector line
-                XSLFAutoShape connector = slide.createAutoShape();
-                connector.setShapeType(ShapeType.LINE);
-                
-                // Calculate bounding box for the line
-                double minX = Math.min(sourceX, targetX);
-                double minY = Math.min(sourceY, targetY);
-                double width = Math.abs(targetX - sourceX);
-                double height = Math.abs(targetY - sourceY);
-                
-                // Ensure minimum dimensions for visibility
-                if (width < 1) width = 1;
-                if (height < 1) height = 1;
-                
-                connector.setAnchor(new Rectangle2D.Double(minX, minY, width, height));
-                connector.setLineColor(Color.GRAY);
-                connector.setLineWidth(1.5);
-                connector.setFillColor(null); // No fill for lines
+                line.setLineColor(Color.GRAY);
+                line.setLineWidth(1.5);
             }
         }
     }
 
-    /**
-     * Write the PowerPoint presentation to a byte array.
-     */
+    private void createEmptyState(XSLFSlide slide) {
+        XSLFTextBox tb = slide.createTextBox();
+        tb.setText("No services found in YAML");
+        tb.setAnchor(new Rectangle2D.Double(100, 100, 500, 50));
+    }
+
     private byte[] writeToByteArray(XMLSlideShow pptx) throws IOException {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             pptx.write(out);

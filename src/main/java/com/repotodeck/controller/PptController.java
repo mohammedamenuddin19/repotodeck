@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -25,35 +26,40 @@ public class PptController {
 
     /**
      * Generate a PowerPoint presentation from Docker Compose YAML.
-     *
-     * @param yamlContent the Docker Compose YAML content as a string
-     * @return ResponseEntity with PPTX file as downloadable attachment
+     * Expects JSON payload: { "yaml": "version: '3.8'..." }
      */
-    @PostMapping(value = "/generate", consumes = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<byte[]> generateSlide(@RequestBody String yamlContent) {
+    @PostMapping(value = "/generate-slide", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<byte[]> generateSlide(@RequestBody Map<String, String> payload) {
         try {
-            // Parse YAML to ServiceNode list
-            List<ServiceNode> nodes = dockerParserService.parse(yamlContent);
+            // 1. Extract YAML string from JSON wrapper
+            String yamlContent = payload.get("yaml");
+            
+            if (yamlContent == null || yamlContent.trim().isEmpty()) {
+                throw new IllegalArgumentException("YAML content cannot be empty");
+            }
 
-            // Generate PowerPoint slide
+            // 2. Parse YAML to ServiceNode list
+            List<ServiceNode> nodes = dockerParserService.parse(yamlContent);
+            
+            if (nodes.isEmpty()) {
+                throw new IllegalArgumentException("No services found in YAML. Check formatting.");
+            }
+
+            // 3. Generate PowerPoint slide
             byte[] pptxBytes = pptGeneratorService.generateSlide(nodes);
 
-            // Set headers for file download
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", "architecture.pptx");
-            headers.setContentLength(pptxBytes.length);
-
+            // 4. Set headers for file download
             return ResponseEntity.ok()
-                    .headers(headers)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=architecture.pptx")
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
                     .body(pptxBytes);
 
         } catch (IOException e) {
-            // Return error response
+            e.printStackTrace();
             return ResponseEntity.internalServerError()
                     .body(("Error generating PowerPoint: " + e.getMessage()).getBytes());
         } catch (Exception e) {
-            // Return error response for parsing or other errors
+            e.printStackTrace();
             return ResponseEntity.badRequest()
                     .body(("Error processing YAML: " + e.getMessage()).getBytes());
         }
