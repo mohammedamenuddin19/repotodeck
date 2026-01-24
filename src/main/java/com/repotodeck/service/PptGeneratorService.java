@@ -34,10 +34,11 @@ public class PptGeneratorService {
                 return writeToByteArray(pptx);
             }
 
+            // 1. Organize Nodes
             Map<Integer, List<ServiceNode>> layers = organizeIntoLayers(nodes);
             Map<String, Rectangle2D.Double> nodePositions = new HashMap<>();
 
-            // 1. Draw Nodes
+            // 2. Draw Nodes
             for (int layerIdx = 0; layerIdx <= 2; layerIdx++) {
                 List<ServiceNode> layerNodes = layers.getOrDefault(layerIdx, new ArrayList<>());
                 if (layerNodes.isEmpty()) continue;
@@ -55,7 +56,7 @@ public class PptGeneratorService {
                 }
             }
 
-            // 2. Draw Connectors (The Safe Way)
+            // 3. Draw Connectors (The Bulletproof "Rotated Box" Method)
             drawConnectors(slide, nodes, nodePositions);
 
             return writeToByteArray(pptx);
@@ -72,9 +73,9 @@ public class PptGeneratorService {
             String id = node.getId().toLowerCase();
             String image = node.getImage() != null ? node.getImage().toLowerCase() : "";
 
-            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("kafka") || image.contains("db") || image.contains("mysql") || image.contains("mongo")) {
+            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("db") || image.contains("mysql") || image.contains("mongo")) {
                 layers.get(2).add(node);
-            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front") || image.contains("ui")) {
+            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front")) {
                 layers.get(0).add(node);
             } else {
                 layers.get(1).add(node);
@@ -88,7 +89,7 @@ public class PptGeneratorService {
         
         if ("DATABASE".equals(node.getType())) {
             shape.setShapeType(ShapeType.FLOW_CHART_MAGNETIC_DISK);
-            shape.setFillColor(new Color(255, 140, 0)); 
+            shape.setFillColor(new Color(255, 140, 0));
         } else {
             shape.setShapeType(ShapeType.ROUND_RECT);
             shape.setFillColor(new Color(0, 114, 198));
@@ -98,8 +99,7 @@ public class PptGeneratorService {
         shape.setLineColor(Color.DARK_GRAY);
         shape.setLineWidth(1.5);
 
-        // Safe Text Handling
-        shape.clearText();
+        // Safe Text Handling (No clearText, No Fonts)
         XSLFTextParagraph p = shape.addNewTextParagraph();
         p.setTextAlign(TextParagraph.TextAlign.CENTER);
         
@@ -108,8 +108,6 @@ public class PptGeneratorService {
         r1.setFontSize(14.0);
         r1.setBold(true);
         r1.setFontColor(Color.WHITE);
-        // REMOVED setFontFamily to avoid OS Conflicts. 
-        // PowerPoint will use the default system font (Arial/Calibri), which is safe.
 
         if (node.getImage() != null && !node.getImage().isEmpty()) {
             XSLFTextRun r2 = p.addNewTextRun();
@@ -129,39 +127,43 @@ public class PptGeneratorService {
                 Rectangle2D.Double end = positions.get(target);
                 if (end == null) continue;
 
-                // BACK TO SIMPLE LINES (But with the Math Fix)
-                XSLFAutoShape line = slide.createAutoShape();
-                line.setShapeType(ShapeType.LINE);
-                
+                // --- THE ROTATED RECTANGLE FIX ---
+                // Instead of a "Line" (which needs flipping), we use a "Rectangle"
+                // with height=2px and rotate it. This is 100% safe in PPT XML.
+
                 double startX = start.getX() + start.getWidth() / 2;
                 double startY = start.getY() + start.getHeight() / 2;
                 double endX = end.getX() + end.getWidth() / 2;
                 double endY = end.getY() + end.getHeight() / 2;
 
-                double width = Math.abs(endX - startX);
-                double height = Math.abs(endY - startY);
+                // 1. Calculate Length and Angle
+                double deltaX = endX - startX;
+                double deltaY = endY - startY;
+                double length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                double angle = Math.toDegrees(Math.atan2(deltaY, deltaX));
 
-                // --- THE CRITICAL FIX ---
-                // PowerPoint corrupts if a shape has 0.0 width or height.
-                // We force a minimum of 1.0 pixel.
-                if (width < 1.0) width = 1.0;
-                if (height < 1.0) height = 1.0;
-
+                // 2. Create a Thin Rectangle (The Line)
+                XSLFAutoShape line = slide.createAutoShape();
+                line.setShapeType(ShapeType.RECT); // Using RECT is safer than LINE
+                line.setFillColor(Color.GRAY);
+                line.setLineColor(Color.GRAY);
+                
+                // 3. Set Anchor (Start at 0,0 initially, then we move it)
+                // We draw it horizontally first, then rotate it.
+                // The anchor defines the "Unrotated" bounding box.
+                // Center of the line:
+                double centerX = (startX + endX) / 2;
+                double centerY = (startY + endY) / 2;
+                
                 line.setAnchor(new Rectangle2D.Double(
-                    Math.min(startX, endX), 
-                    Math.min(startY, endY),
-                    width, 
-                    height
+                    centerX - (length / 2), 
+                    centerY - 1, // 2px height (1 up, 1 down)
+                    length, 
+                    2 // Thickness
                 ));
 
-                // Flip logic for Diagonal Lines
-                // If drawing Bottom-Left to Top-Right, we must flip vertically
-                if ((endX > startX && endY < startY) || (endX < startX && endY > startY)) {
-                    line.setFlipVertical(true);
-                }
-
-                line.setLineColor(Color.GRAY);
-                line.setLineWidth(1.5);
+                // 4. Apply Rotation
+                line.setRotation(angle);
             }
         }
     }
