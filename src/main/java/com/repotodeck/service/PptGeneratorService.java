@@ -111,7 +111,7 @@ public class PptGeneratorService {
         r1.setFontSize(14.0);
         r1.setBold(true);
         r1.setFontColor(Color.WHITE);
-        //r1.setFontFamily("Arial"); // Safe font
+        r1.setFontFamily("DejaVu Sans");
 
         if (node.getImage() != null && !node.getImage().isEmpty()) {
             XSLFTextRun r2 = p.addNewTextRun();
@@ -140,10 +140,21 @@ public class PptGeneratorService {
                 double endX = end.getX() + end.getWidth() / 2;
                 double endY = end.getY() + end.getHeight() / 2;
 
+                // --- THE FIX STARTS HERE ---
+                double width = Math.abs(endX - startX);
+                double height = Math.abs(endY - startY);
+
+                // Prevent "Zero Dimension" error in PowerPoint
+                if (width < 1.0) width = 1.0;
+                if (height < 1.0) height = 1.0;
+
                 line.setAnchor(new Rectangle2D.Double(
-                    Math.min(startX, endX), Math.min(startY, endY),
-                    Math.abs(endX - startX), Math.abs(endY - startY)
+                    Math.min(startX, endX), 
+                    Math.min(startY, endY),
+                    width, 
+                    height
                 ));
+                // --- THE FIX ENDS HERE ---
 
                 // Trick to flip line if needed based on direction
                 if ((endX < startX && endY > startY) || (endX > startX && endY < startY)) {
