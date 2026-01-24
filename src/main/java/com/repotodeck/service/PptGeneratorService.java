@@ -20,13 +20,13 @@ public class PptGeneratorService {
 
     private static final int NODE_WIDTH = 180;
     private static final int NODE_HEIGHT = 90;
-    private static final int NODE_SPACING_X = 60;  // Space between nodes horizontally
-    private static final int LAYER_SPACING_Y = 180; // Space between layers vertically
-    private static final int START_Y = 120; // Top margin
+    private static final int NODE_SPACING_X = 60;
+    private static final int LAYER_SPACING_Y = 180;
+    private static final int START_Y = 120;
 
     public byte[] generateSlide(List<ServiceNode> nodes) throws IOException {
         try (XMLSlideShow pptx = new XMLSlideShow()) {
-            pptx.setPageSize(new java.awt.Dimension(1280, 720)); // HD Aspect Ratio
+            pptx.setPageSize(new java.awt.Dimension(1280, 720));
             XSLFSlide slide = pptx.createSlide();
 
             if (nodes == null || nodes.isEmpty()) {
@@ -34,16 +34,14 @@ public class PptGeneratorService {
                 return writeToByteArray(pptx);
             }
 
-            // 1. Organize Nodes into Layers (Tiers)
             Map<Integer, List<ServiceNode>> layers = organizeIntoLayers(nodes);
             Map<String, Rectangle2D.Double> nodePositions = new HashMap<>();
 
-            // 2. Draw Nodes Layer by Layer
+            // 1. Draw Nodes
             for (int layerIdx = 0; layerIdx <= 2; layerIdx++) {
                 List<ServiceNode> layerNodes = layers.getOrDefault(layerIdx, new ArrayList<>());
                 if (layerNodes.isEmpty()) continue;
 
-                // Calculate center alignment
                 double totalLayerWidth = layerNodes.size() * (NODE_WIDTH + NODE_SPACING_X) - NODE_SPACING_X;
                 double startX = (1280 - totalLayerWidth) / 2;
                 double currentY = START_Y + (layerIdx * LAYER_SPACING_Y);
@@ -53,13 +51,11 @@ public class PptGeneratorService {
                     double currentX = startX + (i * (NODE_WIDTH + NODE_SPACING_X));
 
                     createNodeShape(slide, node, currentX, currentY);
-                    
-                    // Save position for connectors
                     nodePositions.put(node.getId(), new Rectangle2D.Double(currentX, currentY, NODE_WIDTH, NODE_HEIGHT));
                 }
             }
 
-            // 3. Draw Connectors (After nodes so lines are clean)
+            // 2. Draw Connectors (The Safe Way)
             drawConnectors(slide, nodes, nodePositions);
 
             return writeToByteArray(pptx);
@@ -68,20 +64,20 @@ public class PptGeneratorService {
 
     private Map<Integer, List<ServiceNode>> organizeIntoLayers(List<ServiceNode> nodes) {
         Map<Integer, List<ServiceNode>> layers = new HashMap<>();
-        layers.put(0, new ArrayList<>()); // Frontend/Web
-        layers.put(1, new ArrayList<>()); // Backend/API
-        layers.put(2, new ArrayList<>()); // Database/Infra
+        layers.put(0, new ArrayList<>());
+        layers.put(1, new ArrayList<>());
+        layers.put(2, new ArrayList<>());
 
         for (ServiceNode node : nodes) {
             String id = node.getId().toLowerCase();
             String image = node.getImage() != null ? node.getImage().toLowerCase() : "";
 
-            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("kafka")) {
+            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("kafka") || image.contains("db") || image.contains("mysql") || image.contains("mongo")) {
                 layers.get(2).add(node);
-            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front")) {
+            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front") || image.contains("ui")) {
                 layers.get(0).add(node);
             } else {
-                layers.get(1).add(node); // Default to middle tier (API/Services)
+                layers.get(1).add(node);
             }
         }
         return layers;
@@ -92,16 +88,17 @@ public class PptGeneratorService {
         
         if ("DATABASE".equals(node.getType())) {
             shape.setShapeType(ShapeType.FLOW_CHART_MAGNETIC_DISK);
-            shape.setFillColor(new Color(255, 140, 0)); // Darker Orange
+            shape.setFillColor(new Color(255, 140, 0)); 
         } else {
             shape.setShapeType(ShapeType.ROUND_RECT);
-            shape.setFillColor(new Color(0, 114, 198)); // Professional Blue
+            shape.setFillColor(new Color(0, 114, 198));
         }
 
         shape.setAnchor(new Rectangle2D.Double(x, y, NODE_WIDTH, NODE_HEIGHT));
         shape.setLineColor(Color.DARK_GRAY);
         shape.setLineWidth(1.5);
 
+        // Safe Text Handling
         shape.clearText();
         XSLFTextParagraph p = shape.addNewTextParagraph();
         p.setTextAlign(TextParagraph.TextAlign.CENTER);
@@ -111,7 +108,8 @@ public class PptGeneratorService {
         r1.setFontSize(14.0);
         r1.setBold(true);
         r1.setFontColor(Color.WHITE);
-        r1.setFontFamily("DejaVu Sans");
+        // REMOVED setFontFamily to avoid OS Conflicts. 
+        // PowerPoint will use the default system font (Arial/Calibri), which is safe.
 
         if (node.getImage() != null && !node.getImage().isEmpty()) {
             XSLFTextRun r2 = p.addNewTextRun();
@@ -131,10 +129,9 @@ public class PptGeneratorService {
                 Rectangle2D.Double end = positions.get(target);
                 if (end == null) continue;
 
-                // --- FIX: Use XSLFConnectorShape instead of AutoShape ---
-                // This is the "Native" way to draw lines in PPT.
-                // It avoids the "Corrupt Shape" errors caused by manual geometry.
-                XSLFConnectorShape connector = slide.createConnector();
+                // BACK TO SIMPLE LINES (But with the Math Fix)
+                XSLFAutoShape line = slide.createAutoShape();
+                line.setShapeType(ShapeType.LINE);
                 
                 double startX = start.getX() + start.getWidth() / 2;
                 double startY = start.getY() + start.getHeight() / 2;
@@ -144,27 +141,27 @@ public class PptGeneratorService {
                 double width = Math.abs(endX - startX);
                 double height = Math.abs(endY - startY);
 
-                // Prevent Zero-Dimension crash (PowerPoint hates 0x0 objects)
+                // --- THE CRITICAL FIX ---
+                // PowerPoint corrupts if a shape has 0.0 width or height.
+                // We force a minimum of 1.0 pixel.
                 if (width < 1.0) width = 1.0;
                 if (height < 1.0) height = 1.0;
 
-                connector.setAnchor(new Rectangle2D.Double(
+                line.setAnchor(new Rectangle2D.Double(
                     Math.min(startX, endX), 
                     Math.min(startY, endY),
                     width, 
                     height
                 ));
 
-                // Handle Direction Flipping (Crucial for diagonals)
-                if (startX > endX) {
-                    connector.setFlipHorizontal(true);
-                }
-                if (startY > endY) {
-                    connector.setFlipVertical(true);
+                // Flip logic for Diagonal Lines
+                // If drawing Bottom-Left to Top-Right, we must flip vertically
+                if ((endX > startX && endY < startY) || (endX < startX && endY > startY)) {
+                    line.setFlipVertical(true);
                 }
 
-                connector.setLineColor(Color.GRAY);
-                connector.setLineWidth(1.5);
+                line.setLineColor(Color.GRAY);
+                line.setLineWidth(1.5);
             }
         }
     }
