@@ -18,26 +18,30 @@ import java.util.Map;
 @Service
 public class PptGeneratorService {
 
-    // --- CONFIGURATION FOR "COOL" LOOK ---
+    // --- CONFIGURATION ---
+    // Canvas upgraded to Full HD (1920x1080) to fit more boxes
+    private static final int SLIDE_WIDTH = 1920;
+    private static final int SLIDE_HEIGHT = 1080;
+    
     private static final int NODE_WIDTH = 220;
     private static final int NODE_HEIGHT = 100;
-    private static final int NODE_SPACING_X = 50;
-    private static final int LAYER_SPACING_Y = 200;
-    private static final int START_Y = 100;
+    private static final int NODE_SPACING_X = 60;
+    private static final int LAYER_SPACING_Y = 250; // More vertical breathing room
+    private static final int START_Y = 150;
     
-    // Modern Palette (Material Design)
-    private static final Color COLOR_BG = new Color(248, 249, 250); // Off-White Background
-    private static final Color COLOR_SERVICE = new Color(37, 99, 235); // Royal Blue
-    private static final Color COLOR_DB = new Color(234, 88, 12);     // Burnt Orange
-    private static final Color COLOR_LINE = new Color(156, 163, 175); // Soft Gray
-    private static final Color COLOR_SHADOW = new Color(200, 200, 200); // Light Shadow
+    // --- 3-TIER PALETTE ---
+    private static final Color COLOR_BG = new Color(248, 249, 250); 
+    private static final Color COLOR_FRONTEND = new Color(13, 148, 136); // Teal (Entry Points)
+    private static final Color COLOR_SERVICE = new Color(37, 99, 235);   // Royal Blue (Logic)
+    private static final Color COLOR_DB = new Color(234, 88, 12);        // Burnt Orange (Data)
+    private static final Color COLOR_LINE = new Color(156, 163, 175); 
+    private static final Color COLOR_SHADOW = new Color(200, 200, 200); 
 
     public byte[] generateSlide(List<ServiceNode> nodes) throws IOException {
         try (XMLSlideShow pptx = new XMLSlideShow()) {
-            pptx.setPageSize(new java.awt.Dimension(1280, 720));
+            pptx.setPageSize(new java.awt.Dimension(SLIDE_WIDTH, SLIDE_HEIGHT));
             XSLFSlide slide = pptx.createSlide();
 
-            // 0. Set Background Color (Looks premium)
             XSLFBackground bg = slide.getBackground();
             bg.setFillColor(COLOR_BG);
 
@@ -46,27 +50,20 @@ public class PptGeneratorService {
                 return writeToByteArray(pptx);
             }
 
-            // 1. Math: Calculate All Positions First (Don't draw yet)
+            // 1. Math
             Map<Integer, List<ServiceNode>> layers = organizeIntoLayers(nodes);
             Map<String, Rectangle2D.Double> nodePositions = calculatePositions(layers);
 
-            // 2. Layer 1: Connectors (Background)
-            // Lines must be drawn FIRST so they appear BEHIND the boxes
-            drawConnectors(slide, nodes, nodePositions);
-
-            // 3. Layer 2: Shadows (Middle Ground)
-            // Gives depth to the diagram
-            drawShadows(slide, layers, nodePositions);
-
-            // 4. Layer 3: Nodes (Foreground)
-            // Boxes drawn last so they cover lines and shadows
-            drawNodes(slide, layers, nodePositions);
+            // 2. Draw Layers (Order matters for Z-Index)
+            drawConnectors(slide, nodes, nodePositions); // Bottom
+            drawShadows(slide, layers, nodePositions);   // Middle
+            drawNodes(slide, layers, nodePositions);     // Top
 
             return writeToByteArray(pptx);
         }
     }
 
-    // --- MATH HELPERS ---
+    // --- MATH ---
 
     private Map<String, Rectangle2D.Double> calculatePositions(Map<Integer, List<ServiceNode>> layers) {
         Map<String, Rectangle2D.Double> positions = new HashMap<>();
@@ -75,8 +72,9 @@ public class PptGeneratorService {
             List<ServiceNode> layerNodes = layers.getOrDefault(layerIdx, new ArrayList<>());
             if (layerNodes.isEmpty()) continue;
 
+            // Centering Logic
             double totalLayerWidth = layerNodes.size() * (NODE_WIDTH + NODE_SPACING_X) - NODE_SPACING_X;
-            double startX = (1280 - totalLayerWidth) / 2;
+            double startX = (SLIDE_WIDTH - totalLayerWidth) / 2;
             double currentY = START_Y + (layerIdx * LAYER_SPACING_Y);
 
             for (int i = 0; i < layerNodes.size(); i++) {
@@ -88,7 +86,7 @@ public class PptGeneratorService {
         return positions;
     }
 
-    // --- DRAWING HELPERS ---
+    // --- DRAWING ---
 
     private void drawConnectors(XSLFSlide slide, List<ServiceNode> nodes, Map<String, Rectangle2D.Double> positions) {
         for (ServiceNode node : nodes) {
@@ -100,24 +98,24 @@ public class PptGeneratorService {
                 Rectangle2D.Double end = positions.get(target);
                 if (end == null) continue;
 
-                // Smart Anchor Logic (Waterfall Style)
+                // Smart Anchor Logic (Waterfall)
                 double startX = start.getX() + start.getWidth() / 2;
                 double startY;
                 double endX = end.getX() + end.getWidth() / 2;
                 double endY;
 
-                if (end.getY() > start.getY() + start.getHeight()) { // Target is below
+                if (end.getY() > start.getY() + start.getHeight()) { // Below
                     startY = start.getY() + start.getHeight();
                     endY = end.getY();
-                } else if (end.getY() < start.getY() - start.getHeight()) { // Target is above
+                } else if (end.getY() < start.getY() - start.getHeight()) { // Above
                     startY = start.getY();
                     endY = end.getY() + end.getHeight();
-                } else { // Side by side
+                } else { // Side-by-Side
                     startY = start.getY() + start.getHeight() / 2;
                     endY = end.getY() + end.getHeight() / 2;
                 }
 
-                // Draw Rotated Rectangle Line
+                // Rotated Rectangle Line
                 double deltaX = endX - startX;
                 double deltaY = endY - startY;
                 double length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -126,7 +124,7 @@ public class PptGeneratorService {
                 XSLFAutoShape line = slide.createAutoShape();
                 line.setShapeType(ShapeType.RECT);
                 line.setFillColor(COLOR_LINE);
-                line.setLineColor(COLOR_LINE); // No border
+                line.setLineColor(COLOR_LINE);
                 
                 double centerX = (startX + endX) / 2;
                 double centerY = (startY + endY) / 2;
@@ -138,17 +136,12 @@ public class PptGeneratorService {
     }
 
     private void drawShadows(XSLFSlide slide, Map<Integer, List<ServiceNode>> layers, Map<String, Rectangle2D.Double> positions) {
-        // Simple trick: Draw a gray box 5 pixels offset from the real box
         for (List<ServiceNode> layerNodes : layers.values()) {
             for (ServiceNode node : layerNodes) {
                 Rectangle2D.Double pos = positions.get(node.getId());
                 if (pos != null) {
                     XSLFAutoShape shadow = slide.createAutoShape();
-                    if ("DATABASE".equals(node.getType())) {
-                        shadow.setShapeType(ShapeType.FLOW_CHART_MAGNETIC_DISK);
-                    } else {
-                        shadow.setShapeType(ShapeType.ROUND_RECT);
-                    }
+                    shadow.setShapeType("DATABASE".equals(node.getType()) ? ShapeType.FLOW_CHART_MAGNETIC_DISK : ShapeType.ROUND_RECT);
                     shadow.setFillColor(COLOR_SHADOW);
                     shadow.setLineColor(COLOR_SHADOW);
                     shadow.setAnchor(new Rectangle2D.Double(pos.getX() + 6, pos.getY() + 6, NODE_WIDTH, NODE_HEIGHT));
@@ -158,31 +151,35 @@ public class PptGeneratorService {
     }
 
     private void drawNodes(XSLFSlide slide, Map<Integer, List<ServiceNode>> layers, Map<String, Rectangle2D.Double> positions) {
-        for (List<ServiceNode> layerNodes : layers.values()) {
+        for (int layerIdx : layers.keySet()) {
+            List<ServiceNode> layerNodes = layers.get(layerIdx);
             for (ServiceNode node : layerNodes) {
                 Rectangle2D.Double pos = positions.get(node.getId());
                 if (pos != null) {
                     XSLFAutoShape shape = slide.createAutoShape();
                     
+                    // --- COLOR LOGIC ---
                     if ("DATABASE".equals(node.getType())) {
                         shape.setShapeType(ShapeType.FLOW_CHART_MAGNETIC_DISK);
-                        shape.setFillColor(COLOR_DB);
+                        shape.setFillColor(COLOR_DB); // Orange
+                    } else if (layerIdx == 0) {
+                        shape.setShapeType(ShapeType.ROUND_RECT);
+                        shape.setFillColor(COLOR_FRONTEND); // Teal (Tier 1)
                     } else {
                         shape.setShapeType(ShapeType.ROUND_RECT);
-                        shape.setFillColor(COLOR_SERVICE);
+                        shape.setFillColor(COLOR_SERVICE); // Blue (Tier 2)
                     }
 
                     shape.setAnchor(pos);
-                    shape.setLineColor(new Color(255, 255, 255, 100)); // Subtle white border
+                    shape.setLineColor(new Color(255, 255, 255, 100)); 
                     shape.setLineWidth(1.0);
 
                     // Text
                     XSLFTextParagraph p = shape.addNewTextParagraph();
                     p.setTextAlign(TextParagraph.TextAlign.CENTER);
-                    
                     XSLFTextRun r1 = p.addNewTextRun();
                     r1.setText(node.getId());
-                    r1.setFontSize(16.0); // Bigger Text
+                    r1.setFontSize(16.0);
                     r1.setBold(true);
                     r1.setFontColor(Color.WHITE);
 
@@ -190,7 +187,7 @@ public class PptGeneratorService {
                         XSLFTextRun r2 = p.addNewTextRun();
                         r2.setText("\n" + node.getImage());
                         r2.setFontSize(11.0);
-                        r2.setItalic(true); // Stylish
+                        r2.setItalic(true);
                         r2.setFontColor(new Color(240, 240, 240));
                     }
                 }
@@ -210,12 +207,13 @@ public class PptGeneratorService {
             String id = node.getId().toLowerCase();
             String image = node.getImage() != null ? node.getImage().toLowerCase() : "";
 
-            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("db") || image.contains("mysql") || image.contains("mongo")) {
-                layers.get(2).add(node);
-            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("front") || image.contains("ui")) {
-                layers.get(0).add(node);
+            // Heuristics for Tiering
+            if (node.getType().equals("DATABASE") || image.contains("redis") || image.contains("mysql") || image.contains("mongo") || image.contains("postgres")) {
+                layers.get(2).add(node); // Bottom
+            } else if (image.contains("nginx") || image.contains("react") || image.contains("web") || image.contains("gateway") || image.contains("balancer")) {
+                layers.get(0).add(node); // Top
             } else {
-                layers.get(1).add(node);
+                layers.get(1).add(node); // Middle
             }
         }
         return layers;
@@ -223,7 +221,7 @@ public class PptGeneratorService {
 
     private void createEmptyState(XSLFSlide slide) {
         XSLFTextBox tb = slide.createTextBox();
-        tb.setText("No services found in YAML");
+        tb.setText("No services found");
         tb.setAnchor(new Rectangle2D.Double(100, 100, 500, 50));
     }
 
