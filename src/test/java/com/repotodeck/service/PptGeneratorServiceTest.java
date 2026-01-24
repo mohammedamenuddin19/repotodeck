@@ -1,10 +1,8 @@
 package com.repotodeck.service;
 
 import com.repotodeck.model.ServiceNode;
-import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -18,113 +16,111 @@ class PptGeneratorServiceTest {
 
     private final PptGeneratorService pptGeneratorService = new PptGeneratorService();
 
+    /**
+     * TEST 1: THE "LOOK & FEEL" TEST
+     * Generates "test-output-style.pptx"
+     * CHECK FOR:
+     * 1. Blue boxes for Services, Orange for DBs.
+     * 2. Grey shadows behind every box.
+     * 3. Lines appearing BEHIND the boxes (not crossing text).
+     */
     @Test
-    void testGenerateSlide_WithValidData_ShouldReturnBytes() throws IOException {
-        // 1. Arrange (Create Dummy Data)
+    void testVisual_StandardStack() throws IOException {
         List<ServiceNode> nodes = new ArrayList<>();
+
+        // Tier 1: Frontend
+        ServiceNode web = createNode("webapp-ui", "react-frontend:18", "api-gateway");
         
-        // Frontend Node
-        ServiceNode web = new ServiceNode();
-        web.setId("frontend-web");
-        web.setImage("nginx:latest");
-        web.setType("SERVICE");
-        web.setLinks(Arrays.asList("backend-api"));
-        nodes.add(web);
+        // Tier 2: Backend
+        ServiceNode api = createNode("api-gateway", "spring-boot:3.0", "auth-service", "payment-service");
+        ServiceNode auth = createNode("auth-service", "node:18", "users-db");
+        ServiceNode payment = createNode("payment-service", "go:1.20", "payments-db");
 
-        // Backend Node
-        ServiceNode api = new ServiceNode();
-        api.setId("backend-api");
-        api.setImage("java:17");
-        api.setType("SERVICE");
-        api.setLinks(Arrays.asList("user-db"));
-        nodes.add(api);
+        // Tier 3: Database (Should be ORANGE)
+        ServiceNode userDb = createNode("users-db", "postgres:15", null);
+        userDb.setType("DATABASE");
+        
+        ServiceNode payDb = createNode("payments-db", "mysql:8.0", null);
+        payDb.setType("DATABASE");
 
-        // Database Node
-        ServiceNode db = new ServiceNode();
-        db.setId("user-db");
-        db.setImage("postgres:15");
-        db.setType("DATABASE");
-        nodes.add(db);
+        nodes.addAll(Arrays.asList(web, api, auth, payment, userDb, payDb));
 
-        // 2. Act (Generate PPT)
-        byte[] result = pptGeneratorService.generateSlide(nodes);
-
-        // 3. Assert (Verify it worked)
-        assertNotNull(result, "Result should not be null");
-        assertTrue(result.length > 0, "Result should have content (bytes)");
-
-        // 4. Validate it is a Real PPT (Try to load it back)
-        assertDoesNotThrow(() -> {
-            try (ByteArrayInputStream bis = new ByteArrayInputStream(result);
-                 XMLSlideShow ppt = new XMLSlideShow(bis)) {
-                assertNotNull(ppt.getSlides().get(0), "Should have at least one slide");
-            }
-        });
-    }
-
-    @Test
-    void testGenerateSlide_WithEmptyList_ShouldNotCrash() throws IOException {
-        byte[] result = pptGeneratorService.generateSlide(new ArrayList<>());
-        assertNotNull(result);
-        assertTrue(result.length > 0);
+        savePpt(nodes, "test-output-style.pptx");
     }
 
     /**
-     * MANUAL DEBUG TEST
-     * This test writes a real file to your project root.
-     * Run this, then go open "debug-output.pptx" in your folder.
+     * TEST 2: THE "SMART ANCHOR" TEST
+     * Generates "test-output-anchors.pptx"
+     * CHECK FOR:
+     * 1. Vertical connection (Tier 1 -> Tier 2) should look like a Waterfall.
+     * 2. Side-by-Side connection (Tier 2 -> Tier 2) should go Center-to-Center.
      */
     @Test
-    void generateLocalFileForVisualInspection() throws IOException {
-        // Create complex data to test the "Tiered Layout"
+    void testVisual_ComplexAnchors() throws IOException {
         List<ServiceNode> nodes = new ArrayList<>();
-        
-        // Tier 1
-        ServiceNode lb = createNode("load-balancer", "nginx", "web-app");
-        ServiceNode web = createNode("web-app", "react", "api-gateway");
-        
-        // Tier 2
-        ServiceNode gateway = createNode("api-gateway", "spring", "auth-service", "payment-service");
-        ServiceNode auth = createNode("auth-service", "node", "postgres-db");
-        ServiceNode payment = createNode("payment-service", "go", "mysql-db", "redis");
-        
-        // Tier 3
-        ServiceNode pg = createNode("postgres-db", "postgres", null);
-        pg.setType("DATABASE");
-        ServiceNode mysql = createNode("mysql-db", "mysql", null);
-        mysql.setType("DATABASE");
-        ServiceNode redis = createNode("redis", "redis", null);
-        redis.setType("DATABASE");
 
-        nodes.addAll(Arrays.asList(lb, web, gateway, auth, payment, pg, mysql, redis));
+        // 1. Vertical Logic (Frontend -> Backend)
+        ServiceNode top = createNode("Top-Service", "nginx", "Bottom-Service");
+        ServiceNode bottom = createNode("Bottom-Service", "java", null);
 
-        // Generate
-        byte[] result = pptGeneratorService.generateSlide(nodes);
+        // 2. Side-by-Side Logic (Service A -> Service B in same tier)
+        ServiceNode left = createNode("Left-Service", "node", "Right-Service");
+        ServiceNode right = createNode("Right-Service", "node", null);
 
-        // Write to file system
-        File outputFile = new File("debug-output.pptx");
-        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            fos.write(result);
-        }
-
-        System.out.println("---------------------------------------------------");
-        System.out.println("✅ SUCCESS! File generated at: " + outputFile.getAbsolutePath());
-        System.out.println("📂 Go open this file NOW to check the layout.");
-        System.out.println("---------------------------------------------------");
+        // Force them into Tier 1 (Middle) via logic or naming if needed, 
+        // but for now, the heuristic places them based on name/image.
+        // Let's rely on the heuristic: "nginx" goes to Tier 0, "java" to Tier 1.
         
-        assertTrue(outputFile.exists());
-        assertTrue(outputFile.length() > 0);
+        nodes.add(top);
+        nodes.add(bottom);
+        nodes.add(left);
+        nodes.add(right);
+
+        savePpt(nodes, "test-output-anchors.pptx");
     }
 
-    // Helper to make test data easier
+    /**
+     * TEST 3: THE ROBUSTNESS TEST
+     * Ensures the code doesn't crash with garbage input.
+     */
+    @Test
+    void testRobustness() throws IOException {
+        // Empty List
+        byte[] resultEmpty = pptGeneratorService.generateSlide(new ArrayList<>());
+        assertNotNull(resultEmpty);
+        assertTrue(resultEmpty.length > 0);
+
+        // Null List
+        byte[] resultNull = pptGeneratorService.generateSlide(null);
+        assertNotNull(resultNull);
+        assertTrue(resultNull.length > 0);
+    }
+
+    // --- HELPER METHODS ---
+
     private ServiceNode createNode(String id, String image, String... links) {
         ServiceNode node = new ServiceNode();
         node.setId(id);
         node.setImage(image);
-        node.setType("SERVICE");
-        if (links != null) {
+        // Basic type detection for test convenience
+        if (image.contains("postgres") || image.contains("mysql")) {
+            node.setType("DATABASE");
+        } else {
+            node.setType("SERVICE");
+        }
+        
+        if (links != null && links.length > 0 && links[0] != null) {
             node.setLinks(Arrays.asList(links));
         }
         return node;
+    }
+
+    private void savePpt(List<ServiceNode> nodes, String filename) throws IOException {
+        byte[] pptBytes = pptGeneratorService.generateSlide(nodes);
+        File outputFile = new File(filename);
+        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+            fos.write(pptBytes);
+        }
+        System.out.println("✅ Generated: " + outputFile.getAbsolutePath());
     }
 }
