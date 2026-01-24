@@ -111,7 +111,7 @@ public class PptGeneratorService {
         r1.setFontSize(14.0);
         r1.setBold(true);
         r1.setFontColor(Color.WHITE);
-        r1.setFontFamily("Arial"); // Safe font
+        //r1.setFontFamily("Arial"); // Safe font
 
         if (node.getImage() != null && !node.getImage().isEmpty()) {
             XSLFTextRun r2 = p.addNewTextRun();
